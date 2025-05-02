@@ -69,11 +69,21 @@
 			<artifactId>spring-boot-starter-data-ldap</artifactId>
 		</dependency>
 
-		<!-- Düzəldilmiş Swagger dependency -->
+<!--		&lt;!&ndash; Düzəldilmiş Swagger dependency &ndash;&gt;-->
+<!--		<dependency>-->
+<!--			<groupId>org.springdoc</groupId>-->
+<!--			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>-->
+<!--			<version>${springdoc.version}</version>-->
+<!--		</dependency>-->
+
+
 		<dependency>
-			<groupId>org.springdoc</groupId>
-			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-			<version>${springdoc.version}</version>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-client</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
 	</dependencies>
 

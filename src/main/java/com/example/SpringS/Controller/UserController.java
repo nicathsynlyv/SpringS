@@ -8,6 +8,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -142,9 +143,26 @@ public class UserController {
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
-
     @GetMapping("/csrf-token")
     public CsrfToken getCsrfToken(CsrfToken csrfToken) {
         return csrfToken;
     }
+
+
+
+
+//
+//    @GetMapping("/auth")
+//    public String home(OAuth2AuthenticationToken authentication) {
+//        return "Hello, " + authentication.getPrincipal().getAttribute("login");
+//}
+
+    @GetMapping("/auth")
+    public String home(OAuth2AuthenticationToken authentication) {
+        return "Hello, " + authentication.getPrincipal().getAttribute("name");
+    }
+
+
+
+
 }

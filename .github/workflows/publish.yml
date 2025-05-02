@@ -1,0 +1,93 @@
+name: Deploy Backend App
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev or prod)'
+        required: true
+        default: 'prod'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_NAME: qolum-backend
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPO_OWNER: ${{ github.repository_owner }}
+      IMAGE_TAG: ${{ github.sha }}
+
+    steps:
+      - name: Set environment variables
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "ENV=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+          else
+            echo "ENV=dev" >> $GITHUB_ENV
+          fi
+
+      - name: Set environment-specific secrets
+        run: |
+          mkdir -p $HOME/.ssh
+          
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+            echo "${{ secrets.PROD_SERVER_PRIVATE_KEY }}" > $HOME/.ssh/private_key
+            echo "SERVER_USER=${{ secrets.PROD_SERVER_USER }}" >> $GITHUB_ENV
+            echo "SERVER_HOST=${{ secrets.PROD_SERVER_HOST }}" >> $GITHUB_ENV
+            echo "SERVER_PORT=${{ secrets.PROD_SERVER_PORT }}" >> $GITHUB_ENV
+            echo "TAG=latest" >> $GITHUB_ENV
+          else
+            echo "dev in progress"
+            echo "${{ secrets.DEV_SERVER_PRIVATE_KEY }}" > $HOME/.ssh/private_key
+            echo "SERVER_USER=${{ secrets.DEV_SERVER_USER }}" >> $GITHUB_ENV
+            echo "SERVER_HOST=${{ secrets.DEV_SERVER_HOST }}" >> $GITHUB_ENV
+            echo "SERVER_PORT=${{ secrets.DEV_SERVER_PORT }}" >> $GITHUB_ENV
+            echo "TAG=dev" >> $GITHUB_ENV
+          fi          
+          chmod 600 $HOME/.ssh/private_key
+
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t ghcr.io/${{ github.actor }}/${IMAGE_NAME}:$TAG .
+          docker push ghcr.io/${{ github.actor }}/${IMAGE_NAME}:$TAG
+
+#      - name: Setup SSH
+#        run: |
+#          mkdir -p ~/.ssh
+#          echo "$PRIVATE_KEY" > ~/.ssh/id_rsa
+#          chmod 600 ~/.ssh/id_rsa
+
+      - name: Transfer Compose File
+        run: |
+          scp -i $HOME/.ssh/private_key -P $SERVER_PORT -o StrictHostKeyChecking=no docker-compose.$ENV.yml $SERVER_USER@$SERVER_HOST:~/workspace/backend/nicat/
+
+      - name: Debug Environment Variables
+        run: |
+            echo "GITHUB_REPO_OWNER: ${GITHUB_REPO_OWNER}"
+            echo "IMAGE_TAG: ${IMAGE_TAG}"
+
+      - name: Deploy via SSH
+        run: |
+          ssh -i $HOME/.ssh/private_key -p $SERVER_PORT -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST <<EOF
+            cd ~/workspace/backend           
+            export GITHUB_REPO_OWNER=${GITHUB_REPO_OWNER}
+            export TAG=${TAG}
+            echo "${GITHUB_TOKEN}" | docker login ghcr.io -u ${GITHUB_REPO_OWNER} --password-stdin
+            envsubst < docker-compose.$ENV.yml > docker-compose.substituted.yml
+            mv docker-compose.substituted.yml docker-compose.$ENV.yml
+            docker compose -f docker-compose.$TAG.yml pull
+            docker compose -f docker-compose.$ENV.yml down
+            docker compose -f docker-compose.$ENV.yml up -d
+          EOF
